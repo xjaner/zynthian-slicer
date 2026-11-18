@@ -1,0 +1,12 @@
+title: "Slicer - sample slice player"
+icon: "Art/slicer.png"
+author: "xjaner"
+license: "GPL-2.0-or-later"
+source_url: "https://github.com/xjaner/zynthian-slicer"
+size: "1MB"
+content: "zynthian-plugins/lv2/slicer.lv2"
+description: "Splits an audio sample into slices played by consecutive MIDI notes.
+
+An LV2 instrument with a Zynthian widget. Slice by beats, an even grid or detected transients, then edit slice starts, ends and play modes (one-shot, gate, loop). Tap a slice on the waveform to audition it. Hand edits are saved with snapshots, and the slices can be exported as an SFZ instrument for sfizz.<br>
+The plugin is built on the device when installed. Restart the Zynthian UI afterwards; it appears in MIDI Synth &gt; Sampler.
+"

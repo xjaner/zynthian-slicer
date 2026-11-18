@@ -1,0 +1,412 @@
+@prefix atom:   <http://lv2plug.in/ns/ext/atom#> .
+@prefix doap:   <http://usefulinc.com/ns/doap#> .
+@prefix lv2:    <http://lv2plug.in/ns/lv2core#> .
+@prefix midi:   <http://lv2plug.in/ns/ext/midi#> .
+@prefix mod:    <http://moddevices.com/ns/mod#> .
+@prefix patch:  <http://lv2plug.in/ns/ext/patch#> .
+@prefix pg:     <http://lv2plug.in/ns/ext/port-groups#> .
+@prefix pprops: <http://lv2plug.in/ns/ext/port-props#> .
+@prefix rdf:    <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:   <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix urid:   <http://lv2plug.in/ns/ext/urid#> .
+@prefix work:   <http://lv2plug.in/ns/ext/worker#> .
+@prefix log:    <http://lv2plug.in/ns/ext/log#> .
+
+@prefix slicer: <https://github.com/xjaner/zynthian-slicer#> .
+
+# ------------------------------------------------------------------------------
+# Control pages (Zynthian shows each group as a page of up to 4 controls,
+# ordered by lv2:displayPriority, highest first)
+# ------------------------------------------------------------------------------
+
+slicer:sample_group a pg:Group ;
+	lv2:symbol "sample_group" ;
+	lv2:name "Sample" ;
+	lv2:displayPriority 6 .
+
+slicer:slice_group a pg:Group ;
+	lv2:symbol "slice_group" ;
+	lv2:name "Slice" ;
+	lv2:displayPriority 5 .
+
+slicer:detect_group a pg:Group ;
+	lv2:symbol "detect_group" ;
+	lv2:name "Detect" ;
+	lv2:displayPriority 4 .
+
+slicer:edit_group a pg:Group ;
+	lv2:symbol "edit_group" ;
+	lv2:name "Edit" ;
+	lv2:displayPriority 3 .
+
+slicer:view_group a pg:Group ;
+	lv2:symbol "view_group" ;
+	lv2:name "View" ;
+	lv2:displayPriority 2 .
+
+slicer:export_group a pg:Group ;
+	lv2:symbol "export_group" ;
+	lv2:name "Export" ;
+	lv2:displayPriority 1 .
+
+# ------------------------------------------------------------------------------
+# Properties (patch:Set messages; the plugin reports changes back)
+# ------------------------------------------------------------------------------
+
+slicer:sample a lv2:Parameter ;
+	lv2:symbol "sample" ;
+	rdfs:label "sample" ;
+	rdfs:range atom:Path ;
+	mod:fileTypes "wav,ogg,mp3,flac,aac" ;
+	pg:group slicer:sample_group ;
+	lv2:displayPriority 4 .
+
+slicer:slice_map a lv2:Parameter ;
+	lv2:symbol "slice_map" ;
+	rdfs:label "slice map" ;
+	rdfs:comment "Hand-edited slices, saved by the plugin. Restored with snapshots." ;
+	rdfs:range atom:Path ;
+	pprops:notOnGUI true .
+
+slicer:detect a lv2:Parameter ;
+	lv2:symbol "detect" ;
+	rdfs:label "detect" ;
+	rdfs:comment "Slice again with the current settings, discarding hand edits" ;
+	rdfs:range atom:Int ;
+	lv2:default 0 ;
+	lv2:minimum 0 ;
+	lv2:maximum 1 ;
+	lv2:scalePoint [ rdfs:label "run" ; rdf:value 0 ] ,
+	               [ rdfs:label "running" ; rdf:value 1 ] ;
+	pg:group slicer:detect_group ;
+	lv2:displayPriority 1 .
+
+slicer:slice a lv2:Parameter ;
+	lv2:symbol "slice" ;
+	rdfs:label "slice" ;
+	rdfs:range atom:Int ;
+	lv2:default 0 ;
+	lv2:minimum 0 ;
+	lv2:maximum 126 ;
+	pg:group slicer:edit_group ;
+	lv2:displayPriority 4 .
+
+slicer:slice_start a lv2:Parameter ;
+	lv2:symbol "slice_start" ;
+	rdfs:label "start %" ;
+	rdfs:range atom:Float ;
+	lv2:default 0.0 ;
+	lv2:minimum 0.0 ;
+	lv2:maximum 100.0 ;
+	pg:group slicer:edit_group ;
+	lv2:displayPriority 3 .
+
+slicer:slice_end a lv2:Parameter ;
+	lv2:symbol "slice_end" ;
+	rdfs:label "end %" ;
+	rdfs:range atom:Float ;
+	lv2:default 100.0 ;
+	lv2:minimum 0.0 ;
+	lv2:maximum 100.0 ;
+	pg:group slicer:edit_group ;
+	lv2:displayPriority 2 .
+
+slicer:play_mode a lv2:Parameter ;
+	lv2:symbol "play_mode" ;
+	rdfs:label "play mode" ;
+	rdfs:range atom:Int ;
+	lv2:default 1 ;
+	lv2:minimum 0 ;
+	lv2:maximum 2 ;
+	lv2:scalePoint [ rdfs:label "one-shot" ; rdf:value 0 ] ,
+	               [ rdfs:label "gate" ; rdf:value 1 ] ,
+	               [ rdfs:label "loop" ; rdf:value 2 ] ;
+	pg:group slicer:edit_group ;
+	lv2:displayPriority 1 .
+
+slicer:export_sfz a lv2:Parameter ;
+	lv2:symbol "export_sfz" ;
+	rdfs:label "export SFZ" ;
+	rdfs:comment "Export the slices as an SFZ instrument in the sfizz banks" ;
+	rdfs:range atom:Int ;
+	lv2:default 0 ;
+	lv2:minimum 0 ;
+	lv2:maximum 1 ;
+	lv2:scalePoint [ rdfs:label "export" ; rdf:value 0 ] ,
+	               [ rdfs:label "exporting" ; rdf:value 1 ] ;
+	pg:group slicer:export_group ;
+	lv2:displayPriority 1 .
+
+# ------------------------------------------------------------------------------
+# Plugin
+# ------------------------------------------------------------------------------
+
+<https://github.com/xjaner/zynthian-slicer>
+	a lv2:Plugin , lv2:InstrumentPlugin ;
+	doap:name "Slicer" ;
+	doap:license <http://opensource.org/licenses/GPL-2.0> ;
+	doap:maintainer [ doap:name "Zynthian Slicer contributors" ] ;
+	rdfs:comment "Splits an audio sample into slices played by consecutive MIDI notes. Slices by beats, an even grid or detected transients, with hand editing, and exports SFZ for sfizz." ;
+	lv2:minorVersion 1 ;
+	lv2:microVersion 0 ;
+	lv2:requiredFeature urid:map , work:schedule ;
+	lv2:optionalFeature log:log , lv2:hardRTCapable ;
+	lv2:extensionData work:interface ;
+	patch:writable slicer:sample , slicer:slice_map , slicer:detect , slicer:slice ,
+	               slicer:slice_start , slicer:slice_end , slicer:play_mode , slicer:export_sfz ;
+	lv2:port [
+		a lv2:InputPort , atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports midi:MidiEvent , patch:Message ;
+		lv2:designation lv2:control ;
+		lv2:index 0 ;
+		lv2:symbol "control" ;
+		lv2:name "Control"
+	] , [
+		a lv2:OutputPort , atom:AtomPort ;
+		atom:bufferType atom:Sequence ;
+		atom:supports patch:Message ;
+		lv2:designation lv2:control ;
+		lv2:index 1 ;
+		lv2:symbol "notify" ;
+		lv2:name "Notify" ;
+		rdfs:comment "Reports property changes"
+	] , [
+		a lv2:OutputPort , lv2:AudioPort ;
+		lv2:index 2 ;
+		lv2:symbol "out_l" ;
+		lv2:name "Out L"
+	] , [
+		a lv2:OutputPort , lv2:AudioPort ;
+		lv2:index 3 ;
+		lv2:symbol "out_r" ;
+		lv2:name "Out R"
+	] , [
+		a lv2:InputPort , lv2:ControlPort ;
+		lv2:index 4 ;
+		lv2:symbol "gain" ;
+		lv2:name "gain (dB)" ;
+		lv2:default 0.0 ;
+		lv2:minimum -48.0 ;
+		lv2:maximum 12.0 ;
+		pg:group slicer:sample_group ;
+		lv2:displayPriority 3
+	] , [
+		a lv2:InputPort , lv2:ControlPort ;
+		lv2:index 5 ;
+		lv2:symbol "tune" ;
+		lv2:name "tune" ;
+		rdfs:comment "Pitch and speed together, in semitones (+12 = octave up, double speed)" ;
+		lv2:portProperty lv2:integer ;
+		lv2:default 0 ;
+		lv2:minimum -24 ;
+		lv2:maximum 24 ;
+		pg:group slicer:sample_group ;
+		lv2:displayPriority 2
+	] , [
+		a lv2:InputPort , lv2:ControlPort ;
+		lv2:index 6 ;
+		lv2:symbol "base_note" ;
+		lv2:name "base note" ;
+		lv2:portProperty lv2:integer ;
+		lv2:default 36 ;
+		lv2:minimum 1 ;
+		lv2:maximum 127 ;
+		pg:group slicer:sample_group ;
+		lv2:displayPriority 1
+	] , [
+		a lv2:InputPort , lv2:ControlPort ;
+		lv2:index 7 ;
+		lv2:symbol "polyphony" ;
+		lv2:name "polyphony" ;
+		lv2:portProperty lv2:integer ;
+		lv2:default 16 ;
+		lv2:minimum 1 ;
+		lv2:maximum 16 ;
+		pg:group slicer:view_group ;
+		lv2:displayPriority 1
+	] , [
+		a lv2:InputPort , lv2:ControlPort ;
+		lv2:index 8 ;
+		lv2:symbol "slice_mode" ;
+		lv2:name "slice mode" ;
+		lv2:portProperty lv2:integer , lv2:enumeration ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 3 ;
+		lv2:scalePoint [ rdfs:label "beats" ; rdf:value 0 ] ,
+		               [ rdfs:label "grid" ; rdf:value 1 ] ,
+		               [ rdfs:label "transient" ; rdf:value 2 ] ,
+		               [ rdfs:label "manual" ; rdf:value 3 ] ;
+		pg:group slicer:slice_group ;
+		lv2:displayPriority 4
+	] , [
+		a lv2:InputPort , lv2:ControlPort ;
+		lv2:index 9 ;
+		lv2:symbol "slice_count" ;
+		lv2:name "grid slices" ;
+		lv2:portProperty lv2:integer ;
+		lv2:default 8 ;
+		lv2:minimum 1 ;
+		lv2:maximum 127 ;
+		pg:group slicer:slice_group ;
+		lv2:displayPriority 3
+	] , [
+		a lv2:InputPort , lv2:ControlPort ;
+		lv2:index 10 ;
+		lv2:symbol "slice_beats" ;
+		lv2:name "beats" ;
+		lv2:portProperty lv2:integer ;
+		lv2:default 4 ;
+		lv2:minimum 1 ;
+		lv2:maximum 64 ;
+		pg:group slicer:slice_group ;
+		lv2:displayPriority 2
+	] , [
+		a lv2:InputPort , lv2:ControlPort ;
+		lv2:index 11 ;
+		lv2:symbol "slice_subdivision" ;
+		lv2:name "slices / beat" ;
+		lv2:portProperty lv2:integer ;
+		lv2:default 1 ;
+		lv2:minimum 1 ;
+		lv2:maximum 16 ;
+		pg:group slicer:slice_group ;
+		lv2:displayPriority 1
+	] , [
+		a lv2:InputPort , lv2:ControlPort ;
+		lv2:index 12 ;
+		lv2:symbol "threshold" ;
+		lv2:name "threshold" ;
+		rdfs:comment "Transient sensitivity: higher detects fewer" ;
+		lv2:portProperty lv2:integer ;
+		lv2:default 50 ;
+		lv2:minimum 0 ;
+		lv2:maximum 100 ;
+		pg:group slicer:detect_group ;
+		lv2:displayPriority 3
+	] , [
+		a lv2:InputPort , lv2:ControlPort ;
+		lv2:index 13 ;
+		lv2:symbol "min_gap" ;
+		lv2:name "min gap (ms)" ;
+		lv2:portProperty lv2:integer ;
+		lv2:default 50 ;
+		lv2:minimum 10 ;
+		lv2:maximum 2000 ;
+		pg:group slicer:detect_group ;
+		lv2:displayPriority 2
+	] , [
+		a lv2:InputPort , lv2:ControlPort ;
+		lv2:index 14 ;
+		lv2:symbol "zoom" ;
+		lv2:name "zoom" ;
+		rdfs:comment "Waveform zoom in the Zynthian widget (no effect on sound)" ;
+		lv2:portProperty lv2:integer , lv2:enumeration ;
+		lv2:default 1 ;
+		lv2:minimum 1 ;
+		lv2:maximum 128 ;
+		lv2:scalePoint [ rdfs:label "x1" ; rdf:value 1 ] ,
+		               [ rdfs:label "x2" ; rdf:value 2 ] ,
+		               [ rdfs:label "x4" ; rdf:value 4 ] ,
+		               [ rdfs:label "x8" ; rdf:value 8 ] ,
+		               [ rdfs:label "x16" ; rdf:value 16 ] ,
+		               [ rdfs:label "x32" ; rdf:value 32 ] ,
+		               [ rdfs:label "x64" ; rdf:value 64 ] ,
+		               [ rdfs:label "x128" ; rdf:value 128 ] ;
+		pg:group slicer:view_group ;
+		lv2:displayPriority 2
+	] , [
+		a lv2:InputPort , lv2:ControlPort ;
+		lv2:index 15 ;
+		lv2:symbol "audition" ;
+		lv2:name "audition" ;
+		rdfs:comment "Slice index + 1 to play it as a held key, 0 to release (used by the widget)" ;
+		lv2:portProperty lv2:integer , pprops:notOnGUI ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 127
+	] , [
+		a lv2:OutputPort , lv2:ControlPort ;
+		lv2:index 16 ;
+		lv2:symbol "instance_id" ;
+		lv2:name "instance id" ;
+		rdfs:comment "Names the live slice file /tmp/zynthian-slicer-<id>.slices" ;
+		lv2:portProperty lv2:integer ;
+		lv2:minimum 0 ;
+		lv2:maximum 16777215
+	] , [
+		a lv2:OutputPort , lv2:ControlPort ;
+		lv2:index 17 ;
+		lv2:symbol "live_version" ;
+		lv2:name "live version" ;
+		rdfs:comment "Changes each time the live slice file is rewritten" ;
+		lv2:portProperty lv2:integer ;
+		lv2:minimum 0 ;
+		lv2:maximum 16777215
+	] , [
+		a lv2:OutputPort , lv2:ControlPort ;
+		lv2:index 18 ;
+		lv2:symbol "export_count" ;
+		lv2:name "export count" ;
+		rdfs:comment "Changes each time an SFZ export finishes" ;
+		lv2:portProperty lv2:integer ;
+		lv2:minimum 0 ;
+		lv2:maximum 16777215
+	] , [
+		a lv2:OutputPort , lv2:ControlPort ;
+		lv2:index 19 ;
+		lv2:symbol "playhead" ;
+		lv2:name "playhead" ;
+		rdfs:comment "Newest voice position as a fraction of the sample, or -1" ;
+		lv2:minimum -1.0 ;
+		lv2:maximum 1.0
+	] , [
+		a lv2:OutputPort , lv2:ControlPort ;
+		lv2:index 20 ;
+		lv2:symbol "active_0" ;
+		lv2:name "active slices 0-23" ;
+		lv2:portProperty lv2:integer ;
+		lv2:minimum 0 ;
+		lv2:maximum 16777215
+	] , [
+		a lv2:OutputPort , lv2:ControlPort ;
+		lv2:index 21 ;
+		lv2:symbol "active_1" ;
+		lv2:name "active slices 24-47" ;
+		lv2:portProperty lv2:integer ;
+		lv2:minimum 0 ;
+		lv2:maximum 16777215
+	] , [
+		a lv2:OutputPort , lv2:ControlPort ;
+		lv2:index 22 ;
+		lv2:symbol "active_2" ;
+		lv2:name "active slices 48-71" ;
+		lv2:portProperty lv2:integer ;
+		lv2:minimum 0 ;
+		lv2:maximum 16777215
+	] , [
+		a lv2:OutputPort , lv2:ControlPort ;
+		lv2:index 23 ;
+		lv2:symbol "active_3" ;
+		lv2:name "active slices 72-95" ;
+		lv2:portProperty lv2:integer ;
+		lv2:minimum 0 ;
+		lv2:maximum 16777215
+	] , [
+		a lv2:OutputPort , lv2:ControlPort ;
+		lv2:index 24 ;
+		lv2:symbol "active_4" ;
+		lv2:name "active slices 96-119" ;
+		lv2:portProperty lv2:integer ;
+		lv2:minimum 0 ;
+		lv2:maximum 16777215
+	] , [
+		a lv2:OutputPort , lv2:ControlPort ;
+		lv2:index 25 ;
+		lv2:symbol "active_5" ;
+		lv2:name "active slices 120-126" ;
+		lv2:portProperty lv2:integer ;
+		lv2:minimum 0 ;
+		lv2:maximum 16777215
+	] .

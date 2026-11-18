@@ -1,0 +1,5 @@
+build/
+slicer.lv2/slicer.so
+__pycache__/
+*.pyc
+*.dSYM/
