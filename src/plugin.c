@@ -69,12 +69,11 @@
 // Ports (keep in sync with slicer.lv2/slicer.ttl)
 // ----------------------------------------------------------------------------
 
+/* Control inputs come first: Zynthian numbers the plugin's properties right
+   after the quantity of control input ports, so a control input with a
+   higher index would be overwritten by a property. */
 enum {
-    P_CONTROL = 0,      // Atom input: MIDI + patch messages
-    P_NOTIFY,           // Atom output: patch messages
-    P_OUT_L,
-    P_OUT_R,
-    P_GAIN,
+    P_GAIN = 0,
     P_TUNE,
     P_BASE_NOTE,
     P_POLYPHONY,
@@ -86,6 +85,10 @@ enum {
     P_MIN_GAP,
     P_ZOOM,
     P_AUDITION,
+    P_CONTROL,          // Atom input: MIDI + patch messages
+    P_NOTIFY,           // Atom output: patch messages
+    P_OUT_L,
+    P_OUT_R,
     P_INSTANCE_ID,      // Outputs (monitors)
     P_LIVE_VERSION,
     P_EXPORT_COUNT,
@@ -95,6 +98,7 @@ enum {
     P_COUNT
 };
 #define ACTIVE_BITS 24  // Integers up to 2^24 are exact in a float
+#define PER_MILLE 1000.0 // slice_start / slice_end unit: tenths of a percent
 
 // ----------------------------------------------------------------------------
 // Worker messages
@@ -155,8 +159,8 @@ typedef struct {
     SliceTable* table;      // New slice table
     uint32_t flags;
     int32_t selected;
-    float start_pct;
-    float end_pct;
+    int32_t start_pm;       // Selected slice start, in tenths of a percent
+    int32_t end_pm;
     int32_t play_mode;
     char map_path[SLICER_PATH_MAX];
 } WorkResult;
@@ -244,8 +248,8 @@ typedef struct {
     // Values to report to the host on the next cycle
     uint32_t fb_flags;
     int32_t fb_selected;
-    float fb_start_pct;
-    float fb_end_pct;
+    int32_t fb_start_pm;
+    int32_t fb_end_pm;
     int32_t fb_play_mode;
     char fb_map_path[SLICER_PATH_MAX];
 
@@ -448,8 +452,8 @@ static void forge_set_path(Slicer* self, LV2_URID key, const char* path) {
 static void send_feedback(Slicer* self) {
     if (self->fb_flags & FB_SELECTION) {
         forge_set_number(self, self->u.p_slice, 1, self->fb_selected);
-        forge_set_number(self, self->u.p_slice_start, 0, self->fb_start_pct);
-        forge_set_number(self, self->u.p_slice_end, 0, self->fb_end_pct);
+        forge_set_number(self, self->u.p_slice_start, 1, self->fb_start_pm);
+        forge_set_number(self, self->u.p_slice_end, 1, self->fb_end_pm);
         forge_set_number(self, self->u.p_play_mode, 1, self->fb_play_mode);
     }
     if (self->fb_flags & FB_MAP)
@@ -787,8 +791,13 @@ static void save_map(Slicer* self, char* path, size_t size) {
     size_t len = slicemap_format(model, 0, self->text, self->text_size);
     if (!len)
         return;
-    snprintf(path, size, "%s/%016llx.slices", self->maps_dir,
-             (unsigned long long)slicer_hash(self->text, len));
+    int n = snprintf(path, size, "%s/%016llx.slices", self->maps_dir,
+                     (unsigned long long)slicer_hash(self->text, len));
+    if (n < 0 || (size_t)n >= size) {
+        lv2_log_error(&self->logger, "Slicer: slice map folder path too long: %s\n", self->maps_dir);
+        path[0] = 0;
+        return;
+    }
     if (access(path, F_OK) == 0)
         return;
     if (make_dir(self->maps_dir) || write_file_atomic(path, self->text, len)) {
@@ -801,12 +810,12 @@ static void fill_selection(const Slicer* self, WorkResult* res) {
     const Model* model = self->model;
     res->flags |= FB_SELECTION;
     res->selected = model->selected;
-    res->start_pct = res->end_pct = 0.0f;
+    res->start_pm = res->end_pm = 0;
     res->play_mode = DEFAULT_PLAY_MODE;
     if (model->count && model->source_frames) {
         const SliceDef* sl = &model->slices[model->selected];
-        res->start_pct = (float)(100.0 * sl->start / model->source_frames);
-        res->end_pct = (float)(100.0 * sl->end / model->source_frames);
+        res->start_pm = (int32_t)llround(PER_MILLE * sl->start / model->source_frames);
+        res->end_pm = (int32_t)llround(PER_MILLE * sl->end / model->source_frames);
         res->play_mode = sl->mode;
     }
 }
@@ -884,14 +893,14 @@ static LV2_Worker_Status work(LV2_Handle instance, LV2_Worker_Respond_Function r
             break;
         case JOB_SET_START:
             if (model->source_frames) {
-                model_set_start(model, (uint32_t)llround(fmax(0.0, job.u.fval) * model->source_frames / 100.0));
+                model_set_start(model, (uint32_t)llround(fmax(0.0, job.u.fval) * model->source_frames / PER_MILLE));
                 slices_changed = 1;
             }
             fill_selection(self, res);
             break;
         case JOB_SET_END:
             if (model->source_frames) {
-                model_set_end(model, (uint32_t)llround(fmax(0.0, job.u.fval) * model->source_frames / 100.0));
+                model_set_end(model, (uint32_t)llround(fmax(0.0, job.u.fval) * model->source_frames / PER_MILLE));
                 slices_changed = 1;
             }
             fill_selection(self, res);
@@ -968,8 +977,8 @@ static LV2_Worker_Status work_response(LV2_Handle instance, uint32_t size, const
     }
     if (res->flags & FB_SELECTION) {
         self->fb_selected = res->selected;
-        self->fb_start_pct = res->start_pct;
-        self->fb_end_pct = res->end_pct;
+        self->fb_start_pm = res->start_pm;
+        self->fb_end_pm = res->end_pm;
         self->fb_play_mode = res->play_mode;
     }
     if (res->flags & FB_MAP)

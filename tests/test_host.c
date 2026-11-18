@@ -31,8 +31,8 @@
 #define RING_SIZE 4096
 #define SEQ_SIZE 8192
 
-enum { P_CONTROL, P_NOTIFY, P_OUT_L, P_OUT_R, P_GAIN, P_TUNE, P_BASE_NOTE, P_POLYPHONY, P_SLICE_MODE,
-       P_SLICE_COUNT, P_SLICE_BEATS, P_SLICE_SUBDIVISION, P_THRESHOLD, P_MIN_GAP, P_ZOOM, P_AUDITION,
+enum { P_GAIN, P_TUNE, P_BASE_NOTE, P_POLYPHONY, P_SLICE_MODE, P_SLICE_COUNT, P_SLICE_BEATS,
+       P_SLICE_SUBDIVISION, P_THRESHOLD, P_MIN_GAP, P_ZOOM, P_AUDITION, P_CONTROL, P_NOTIFY, P_OUT_L, P_OUT_R,
        P_INSTANCE_ID, P_LIVE_VERSION, P_EXPORT_COUNT, P_PLAYHEAD, P_ACTIVE_0, P_COUNT = P_ACTIVE_0 + 6 };
 
 static int failures = 0, checks = 0;
@@ -322,8 +322,9 @@ static Host* host_new(const char* plugin_path) {
     host->desc->connect_port(host->handle, P_NOTIFY, host->notify);
     host->desc->connect_port(host->handle, P_OUT_L, host->out_l);
     host->desc->connect_port(host->handle, P_OUT_R, host->out_r);
-    for (int p = P_GAIN; p < P_COUNT; p++)
-        host->desc->connect_port(host->handle, p, &host->ports[p]);
+    for (int p = 0; p < P_COUNT; p++)
+        if (p != P_CONTROL && p != P_NOTIFY && p != P_OUT_L && p != P_OUT_R)
+            host->desc->connect_port(host->handle, p, &host->ports[p]);
     host->ports[P_GAIN] = 0;
     host->ports[P_TUNE] = 0;
     host->ports[P_BASE_NOTE] = 36;
@@ -461,7 +462,7 @@ int main(int argc, char** argv) {
     CHECK(read_live(a, live_dir, &live) == 0);
     CHECK(live.count == 4 && !live.manual && !strcmp(live.sample, wav));
     CHECK(a->ports[P_LIVE_VERSION] > 0);
-    CHECK(a->fb_slice == 0 && a->fb_start == 0.0f && fabsf(a->fb_end - 25.0f) < 0.01f && a->fb_mode == PLAY_GATE);
+    CHECK(a->fb_slice == 0 && a->fb_start == 0 && a->fb_end == 250 && a->fb_mode == PLAY_GATE);
 
     // Play the first slice
     send_midi(a, 10, LV2_MIDI_MSG_NOTE_ON, 36, 100);
@@ -487,31 +488,31 @@ int main(int argc, char** argv) {
     // Edits right after loading are ignored (a snapshot being restored)
     send_path(a, u_sample, wav);
     send_number(a, u_slice, 1);
-    send_number(a, u_slice_start, 20.0f);
+    send_number(a, u_slice_start, 200);
     settle(a);
     read_live(a, live_dir, &live);
-    CHECK(!live.manual && a->fb_slice == 1 && fabsf(a->fb_start - 12.5f) < 0.01f);
+    CHECK(!live.manual && a->fb_slice == 1 && a->fb_start == 125);
     run_seconds(a, 0.6);
 
     // Select and edit
     send_number(a, u_slice, 3);
     settle(a);
-    CHECK(a->fb_slice == 3 && fabsf(a->fb_start - 37.5f) < 0.01f && fabsf(a->fb_end - 50.0f) < 0.01f);
+    CHECK(a->fb_slice == 3 && a->fb_start == 375 && a->fb_end == 500);
     read_live(a, live_dir, &live);
     CHECK(live.selected == 3);
     send_number(a, u_slice, 200); // Clamped
     settle(a);
     CHECK(a->fb_slice == 7);
     send_number(a, u_slice, 3);
-    send_number(a, u_slice_start, 40.0f);
+    send_number(a, u_slice_start, 400);
     send_number(a, u_play_mode, PLAY_LOOP);
     settle(a);
-    CHECK(fabsf(a->fb_start - 40.0f) < 0.01f && a->fb_mode == PLAY_LOOP);
+    CHECK(a->fb_start == 400 && a->fb_mode == PLAY_LOOP);
     read_live(a, live_dir, &live);
     CHECK(live.manual && live.count == 8 && live.ends[2] == live.starts[3] && !strcmp(live.modes[3], "loop"));
-    send_number(a, u_slice_end, 99.0f); // Limited by the next slice's end
+    send_number(a, u_slice_end, 990); // Limited by the next slice's end
     settle(a);
-    CHECK(a->fb_end < 62.5f && a->fb_end > 62.4f);
+    CHECK(a->fb_end == 625); // 55124 of 88200 frames
 
     // The slice map is saved once edits settle
     CHECK(a->fb_map_count == 0);
@@ -566,18 +567,18 @@ int main(int argc, char** argv) {
     Host* d = host_new(plugin);
     d->ports[P_SLICE_MODE] = SLICE_GRID;
     d->ports[P_SLICE_COUNT] = 4;
-    send_number(d, u_slice_start, 10.0f);
+    send_number(d, u_slice_start, 100);
     send_number(d, u_play_mode, PLAY_ONE_SHOT);
     send_number(d, u_slice, 3);
     send_path(d, u_sample, wav);
-    send_number(d, u_slice_end, 70.0f);
+    send_number(d, u_slice_end, 700);
     send_path(d, u_slice_map, saved_map);
     settle(d);
     read_live(d, live_dir, &live);
     CHECK(live.count == edited.count && live.manual && live.selected == 3);
     CHECK(!memcmp(live.starts, edited.starts, sizeof(live.starts)) && !memcmp(live.ends, edited.ends, sizeof(live.ends)));
     CHECK(!strcmp(live.modes[3], "loop"));
-    CHECK(d->fb_slice == 3 && fabsf(d->fb_start - 40.0f) < 0.01f && d->fb_mode == PLAY_LOOP);
+    CHECK(d->fb_slice == 3 && d->fb_start == 400 && d->fb_mode == PLAY_LOOP);
     run_seconds(d, 1.2);
     CHECK(d->fb_map_count == 0);
     host_free(d);

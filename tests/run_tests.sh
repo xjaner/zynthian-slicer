@@ -4,9 +4,10 @@
 #   1. Model unit tests (C)
 #   2. C slicing / SFZ output compared with the Python reference
 #   3. Plugin driven by a jalv-like test host (C)
-#   4. Widget logic with fake Zynthian modules (Python)
+#   4. Plugin description checked against how Zynthian reads it (Python)
+#   5. Widget logic with fake Zynthian modules (Python)
 #
-# Needs Python 3 with numpy and soundfile (both present on Zynthian).
+# Needs Python 3 with numpy, soundfile and rdflib (all present on Zynthian).
 # Set PYTHON to choose the interpreter.
 
 set -u
@@ -33,6 +34,7 @@ run() {
 run "Model unit tests" build/test_model unit
 run "Comparison with the Python slicer" "$PYTHON" tests/compare.py build/test_model "$WORK/audio"
 run "Plugin host tests" build/test_host slicer.lv2/slicer.so "$WORK/audio/loop44.wav" "$WORK/host"
+run "Plugin description (TTL) tests" "$PYTHON" tests/test_ttl.py
 run "Widget tests" "$PYTHON" tests/test_widget.py
 
 echo

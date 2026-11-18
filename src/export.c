@@ -159,17 +159,20 @@ static int make_dirs(const char* path) {
     return 0;
 }
 
-static void absolute_path(const char* path, char* out, size_t size) {
+/* Resolve a path (as is if it doesn't exist yet). Returns -1 if it doesn't fit. */
+static int absolute_path(const char* path, char* out, size_t size) {
     char* abs = realpath(path, NULL);
-    snprintf(out, size, "%s", abs ? abs : path);
+    int n = snprintf(out, size, "%s", abs ? abs : path);
     free(abs);
+    return n < 0 || (size_t)n >= size ? -1 : 0;
 }
 
 /* Folder name: reuse this sample's folder, else find a free one. */
 static void get_export_name(const char* output_dir, const char* base, const char* sample_path,
                             char* out, size_t size) {
     char src[SLICER_PATH_MAX];
-    absolute_path(sample_path, src, sizeof(src));
+    if (absolute_path(sample_path, src, sizeof(src)))
+        src[0] = 0; // Too long to compare: always use a new folder
     snprintf(out, size, "%s", base);
     for (int n = 1;; n++) {
         char dir[SLICER_PATH_MAX];
@@ -222,8 +225,8 @@ static int write_wav(const char* src, const char* dst) {
     const char* ext = strrchr(src, '.');
     if (ext && !strcasecmp(ext, ".wav")) {
         char a[SLICER_PATH_MAX], b[SLICER_PATH_MAX];
-        absolute_path(src, a, sizeof(a));
-        absolute_path(dst, b, sizeof(b));
+        if (absolute_path(src, a, sizeof(a)) || absolute_path(dst, b, sizeof(b)))
+            return -1;
         if (!strcmp(a, b))
             return 0;
         return copy_file(src, dst);
@@ -266,7 +269,11 @@ int sfz_export(const char* sample_path, const SliceDef* slices, uint32_t count,
 
     char dir[SLICER_PATH_MAX], wav[SLICER_PATH_MAX + 320], sfz[SLICER_PATH_MAX + 320];
     char yml[SLICER_PATH_MAX + 320], marker[SLICER_PATH_MAX + 320], wav_name[320];
-    snprintf(dir, sizeof(dir), "%s/%s", output_dir, name);
+    int n = snprintf(dir, sizeof(dir), "%s/%s", output_dir, name);
+    if (n < 0 || (size_t)n >= sizeof(dir)) {
+        snprintf(error, error_size, "path too long");
+        return -1;
+    }
     snprintf(wav_name, sizeof(wav_name), "%s.wav", name);
     snprintf(wav, sizeof(wav), "%s/%s", dir, wav_name);
     snprintf(sfz, sizeof(sfz), "%s/%s.sfz", dir, name);
@@ -294,8 +301,8 @@ int sfz_export(const char* sample_path, const SliceDef* slices, uint32_t count,
         ok = write_file_atomic(yml, text, strlen(text)) == 0;
     }
     if (ok) {
-        absolute_path(sample_path, text, size);
-        ok = write_file_atomic(marker, text, strlen(text)) == 0;
+        ok = absolute_path(sample_path, text, size) == 0
+             && write_file_atomic(marker, text, strlen(text)) == 0;
     }
     free(text);
     if (!ok) {

@@ -47,11 +47,12 @@ webconf (or reinstall the engine list) and restart the UI.
 | Sample | sample (file), gain (dB), tune, base note |
 | Slice  | slice mode (beats / grid / transient / manual), grid slices, beats, slices / beat |
 | Detect | threshold, min gap (ms), detect |
-| Edit   | slice, start %, end %, play mode |
+| Edit   | slice, start ‰, end ‰, play mode |
 | View   | zoom, polyphony |
 | Export | export SFZ |
 
-Slice *n* plays on MIDI note *base note + n*. Note 0 (and *All notes off*) stops every voice.
+Start and end are in ‰ (tenths of a percent of the sample, 0–1000): a knob step is 1 %, or 0.1 % with
+fine adjustment. Slice *n* plays on MIDI note *base note + n*. Note 0 (and *All notes off*) stops every voice.
 
 Changing the slicing settings re-slices the sample until you edit a slice by hand. After that, the
 edits are kept: press **detect** to slice again, or use slice mode **manual** to never re-slice.
@@ -68,6 +69,9 @@ The plugin owns all the logic, so the control pages work whether or not the widg
 - **Properties** (`patch:Set`): sample, slice, start, end, play mode, detect, export. The plugin reports
   the real values back, so Zynthian's knobs follow the plugin (selecting a slice updates start/end).
   Detect and export are reset to 0 after each press, because Zynthian never sends triggers back to 0.
+  Two Zynthian quirks shape the plugin description (checked by `tests/test_ttl.py`): control input
+  ports come first, because Zynthian numbers properties right after them and would overwrite later
+  ports; and numeric properties are integers, because Zynthian drops float properties.
 - **Live slice file** `/tmp/zynthian-slicer-<id>.slices`: the current slices, rewritten after each change.
   The widget finds it through the `instance_id` monitor and re-reads it when `live_version` changes.
   Playing slices and the playhead come from the `active_*` and `playhead` monitors.
@@ -101,9 +105,10 @@ make test
 3. The plugin driven by a jalv-like test host (threaded worker, 4 KiB rings): loading, playing, slicing,
    editing, saving and restoring slice maps (including snapshot values in the worst order), audition,
    tune, base note, export
-4. The widget's logic, with fake Zynthian modules
+4. The plugin description, against how Zynthian reads it
+5. The widget's logic, with fake Zynthian modules
 
-They need Python 3 with numpy and soundfile, which Zynthian has.
+They need Python 3 with numpy, soundfile and rdflib, which Zynthian has.
 
 ## Layout
 
